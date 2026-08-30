@@ -308,8 +308,21 @@ function selectStock(stock) {
   const stockInput = document.getElementById("stockInput");
   const suggestions = document.getElementById("suggestions");
 
+  if (!stock || !stock.symbol) return;
+
+  const normalized = {
+    name: stock.name,
+    symbol: stock.symbol.toUpperCase().endsWith('.NS') || stock.symbol.toUpperCase().endsWith('.BO')
+      ? stock.symbol.toUpperCase()
+      : `${stock.symbol.toUpperCase()}.NS`
+  };
+
+  if (!stockList.some(item => item.symbol.toUpperCase() === normalized.symbol)) {
+    stockList.push(normalized);
+  }
+
   if (stockInput) {
-    stockInput.value = stock.symbol.replace(/\.(NS|BO)$/i, "");
+    stockInput.value = normalized.symbol.replace(/\.(NS|BO)$/i, "");
   }
 
   if (suggestions) {
