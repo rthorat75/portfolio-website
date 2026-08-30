@@ -408,10 +408,170 @@ function setupStockSearch() {
   });
 }
 
+function renderSignalSidebar(items) {
+  const sidebar = document.getElementById("signalSidebar");
+  if (!sidebar) return;
+
+  if (!items.length) {
+    sidebar.innerHTML = '<div class="sidebar-text">No strong signals right now.</div>';
+    return;
+  }
+
+  sidebar.innerHTML = items.map(item => `
+    <div class="sidebar-item ${item.type}" data-symbol="${item.stock.symbol}">
+      <div class="sidebar-topline">
+        <span class="sidebar-symbol">${item.stock.symbol.replace(/\.(NS|BO)$/i, "")}</span>
+        <span class="sidebar-tag ${item.type}">${item.type.toUpperCase()}</span>
+      </div>
+      <div class="sidebar-text">${item.signalText}</div>
+    </div>
+  `).join("");
+
+  sidebar.querySelectorAll(".sidebar-item").forEach(node => {
+    node.addEventListener("click", () => {
+      const symbol = node.dataset.symbol;
+      const stock = stockList.find(item => item.symbol.toUpperCase() === symbol.toUpperCase()) || { symbol, name: symbol };
+      if (stock) {
+        const input = document.getElementById("stockInput");
+        if (input) {
+          input.value = symbol.replace(/\.(NS|BO)$/i, "");
+        }
+        loadStock();
+      }
+    });
+  });
+}
+
+async function populateSignalSidebar() {
+  const sidebar = document.getElementById("signalSidebar");
+  if (!sidebar || !stockList.length) return;
+
+  sidebar.innerHTML = '<div class="sidebar-text">Scanning strong setups...</div>';
+
+  const shortlist = dedupeStockList(stockList)
+    .filter(stock => stock.symbol && (stock.symbol.toUpperCase().endsWith('.NS') || stock.symbol.toUpperCase().endsWith('.BO')))
+    .slice(0, 18);
+
+  const results = [];
+
+  for (const stock of shortlist) {
+    try {
+      const response = await fetchChartData(stock.symbol);
+      const result = response.data;
+      let prices = [];
+
+      if (response.localOnly || (Array.isArray(result.prices) && Array.isArray(result.labels))) {
+        prices = result.prices;
+      } else if (result && result.chart && result.chart.result && result.chart.result[0]) {
+        const rawClose = result.chart.result[0].indicators.quote[0].close || [];
+        prices = rawClose.filter(price => typeof price === 'number' && !Number.isNaN(price));
+      }
+
+      if (!prices.length) continue;
+
+      const signal = evaluateTechnicalSignal(prices);
+      if (signal.type !== 'hold' && signal.strength >= 2) {
+        results.push({ stock, type: signal.type, signalText: signal.text });
+      }
+    } catch (err) {
+      console.warn("Sidebar signal scan failed for", stock.symbol, err);
+    }
+  }
+
+  results.sort((a, b) => {
+    const aScore = a.type === 'buy' ? 1 : -1;
+    const bScore = b.type === 'buy' ? 1 : -1;
+    return bScore - aScore;
+  });
+
+  renderSignalSidebar(results.slice(0, 8));
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   setupStockSearch();
-  loadStockList();
+  loadStockList().finally(() => {
+    populateSignalSidebar();
+  });
 });
+
+function evaluateTechnicalSignal(validPrices) {
+  if (!validPrices || !validPrices.length) {
+    return { type: 'hold', text: 'No price data', strength: 0 };
+  }
+
+  const latestPrice = validPrices[validPrices.length - 1];
+  const rsi = calculateRSI(validPrices);
+  const ma20 = movingAverage(validPrices, 20);
+  const ma10 = movingAverage(validPrices, 10);
+  const ema12 = calculateEMA(validPrices, 12);
+  const ema26 = calculateEMA(validPrices, 26);
+  const { macd, signalLine } = calculateMACD(validPrices);
+  const bollinger = calculateBollingerBands(validPrices, 20);
+  const vwap = calculateVWAP(validPrices.slice(-20));
+
+  const priceAboveMA = latestPrice > ma20;
+  const priceBelowMA = latestPrice < ma20;
+  const shortTrendUp = ma10 > ma20;
+  const shortTrendDown = ma10 < ma20;
+  const emaTrendUp = ema12 > ema26;
+  const emaTrendDown = ema12 < ema26;
+  const macdBullish = macd > signalLine;
+  const macdBearish = macd < signalLine;
+  const priceNearLowerBand = latestPrice <= bollinger.lower;
+  const priceNearUpperBand = latestPrice >= bollinger.upper;
+  const priceAboveVWAP = latestPrice > vwap;
+  const priceBelowVWAP = latestPrice < vwap;
+
+  const recentWindow = Math.max(5, Math.min(10, validPrices.length - 1));
+  const previousValue = validPrices[validPrices.length - recentWindow] || validPrices[0];
+  const recentPercent = previousValue === 0 ? 0 : ((latestPrice - previousValue) / previousValue) * 100;
+
+  const bullishTrend = latestPrice > ma10 && ma10 > ma20 && ema12 > ema26 && priceAboveMA;
+  const bearishTrend = latestPrice < ma10 && ma10 < ma20 && ema12 < ema26 && priceBelowMA;
+  const bullishMomentum = macdBullish && ((rsi >= 45 && rsi <= 75) || rsi < 35);
+  const bearishMomentum = macdBearish && ((rsi <= 55 && rsi >= 25) || rsi > 65);
+
+  const strongBuy = (bullishTrend && bullishMomentum) || (recentPercent > 1.5 && priceAboveMA && macdBullish) || (rsi < 35 && macdBullish && priceAboveMA && priceAboveVWAP);
+  const strongSell = (bearishTrend && bearishMomentum) || (recentPercent < -1.5 && priceBelowMA && macdBearish) || (rsi > 65 && macdBearish && priceBelowMA && priceBelowVWAP);
+
+  if (strongBuy) {
+    return {
+      type: 'buy',
+      text: `BUY at ₹${latestPrice.toFixed(2)} (Trend up, RSI ${rsi.toFixed(1)}, MACD bullish)`,
+      strength: 3
+    };
+  }
+
+  if (strongSell) {
+    return {
+      type: 'sell',
+      text: `SELL at ₹${latestPrice.toFixed(2)} (Trend down, RSI ${rsi.toFixed(1)}, MACD bearish)`,
+      strength: 3
+    };
+  }
+
+  if (priceNearLowerBand && macdBullish && rsi < 50) {
+    return {
+      type: 'buy',
+      text: `BUY at ₹${latestPrice.toFixed(2)} (Lower band support, RSI ${rsi.toFixed(1)})`,
+      strength: 2
+    };
+  }
+
+  if (priceNearUpperBand && macdBearish && rsi > 50) {
+    return {
+      type: 'sell',
+      text: `SELL at ₹${latestPrice.toFixed(2)} (Upper band resistance, RSI ${rsi.toFixed(1)})`,
+      strength: 2
+    };
+  }
+
+  return {
+    type: 'hold',
+    text: `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, mixed trend)`,
+    strength: 0
+  };
+}
 
 function calculateRSI(prices, period = 14) {
   if (prices.length < 2) return 50;
@@ -574,56 +734,9 @@ async function loadStock() {
     }
   });
 
-  const latestPrice = validPrices[validPrices.length - 1];
-  const rsi = calculateRSI(validPrices);
-  const ma20 = movingAverage(validPrices, 20);
-  const ma10 = movingAverage(validPrices, 10);
-  const ema12 = calculateEMA(validPrices, 12);
-  const ema26 = calculateEMA(validPrices, 26);
-  const { macd, signalLine } = calculateMACD(validPrices);
-  const bollinger = calculateBollingerBands(validPrices, 20);
-  const vwap = calculateVWAP(validPrices.slice(-20));
-
-  const priceAboveMA = latestPrice > ma20;
-  const priceBelowMA = latestPrice < ma20;
-  const shortTrendUp = ma10 > ma20;
-  const shortTrendDown = ma10 < ma20;
-  const emaTrendUp = ema12 > ema26;
-  const emaTrendDown = ema12 < ema26;
-  const macdBullish = macd > signalLine;
-  const macdBearish = macd < signalLine;
-  const priceNearLowerBand = latestPrice <= bollinger.lower;
-  const priceNearUpperBand = latestPrice >= bollinger.upper;
-  const priceAboveVWAP = latestPrice > vwap;
-  const priceBelowVWAP = latestPrice < vwap;
-
-  const recentWindow = Math.max(5, Math.min(10, validPrices.length - 1));
-  const previousValue = validPrices[validPrices.length - recentWindow] || validPrices[0];
-  const recentPercent = previousValue === 0 ? 0 : ((latestPrice - previousValue) / previousValue) * 100;
-
-  const bullishTrend = trendUp = latestPrice > ma10 && ma10 > ma20 && ema12 > ema26 && priceAboveMA;
-  const bearishTrend = trendDown = latestPrice < ma10 && ma10 < ma20 && ema12 < ema26 && priceBelowMA;
-  const bullishMomentum = macdBullish && (rsi >= 45 && rsi <= 75 || rsi < 35);
-  const bearishMomentum = macdBearish && (rsi <= 55 && rsi >= 25 || rsi > 65);
-
-  const strongBuy = (bullishTrend && bullishMomentum) || (recentPercent > 1.5 && priceAboveMA && macdBullish) || (rsi < 35 && macdBullish && priceAboveMA && priceAboveVWAP);
-  const strongSell = (bearishTrend && bearishMomentum) || (recentPercent < -1.5 && priceBelowMA && macdBearish) || (rsi > 65 && macdBearish && priceBelowMA && priceBelowVWAP);
-
-  if (strongBuy) {
-    signalText = `BUY at ₹${latestPrice.toFixed(2)} (Trend up, RSI ${rsi.toFixed(1)}, MACD bullish)`;
-    signalType = "buy";
-  } else if (strongSell) {
-    signalText = `SELL at ₹${latestPrice.toFixed(2)} (Trend down, RSI ${rsi.toFixed(1)}, MACD bearish)`;
-    signalType = "sell";
-  } else if (priceNearLowerBand && macdBullish && rsi < 50) {
-    signalText = `BUY at ₹${latestPrice.toFixed(2)} (Lower band support, RSI ${rsi.toFixed(1)})`;
-    signalType = "buy";
-  } else if (priceNearUpperBand && macdBearish && rsi > 50) {
-    signalText = `SELL at ₹${latestPrice.toFixed(2)} (Upper band resistance, RSI ${rsi.toFixed(1)})`;
-    signalType = "sell";
-  } else {
-    signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, mixed trend)`;
-  }
+  const signal = evaluateTechnicalSignal(validPrices);
+  signalText = signal.text;
+  signalType = signal.type;
 
   setSignal(`Signal: ${signalText}`, signalType);
 }
