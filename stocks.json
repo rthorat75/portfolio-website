@@ -35,6 +35,8 @@
   {"name":"Mahindra & Mahindra","symbol":"M&M.BO"},
   {"name":"Tata Steel","symbol":"TATASTEEL.NS"},
   {"name":"Tata Steel","symbol":"TATASTEEL.BO"},
+  {"name":"Subex","symbol":"SUBEX.NS"},
+  {"name":"Subex","symbol":"SUBEX.BO"},
   {"name":"Deltacorp","symbol":"DELTACORP.NS"},
   {"name":"Deltacorp","symbol":"DELTACORP.BO"},
   {"name":"CESC","symbol":"CESC.NS"},
@@ -108,5 +110,7 @@
   {"name":"Adani Enterprises","symbol":"ADANIENT.NS"},
   {"name":"Adani Enterprises","symbol":"ADANIENT.BO"},
   {"name":"Adani Green Energy","symbol":"ADANIGREEN.NS"},
-  {"name":"Adani Total Gas","symbol":"ADANITRANS.NS"}
+  {"name":"Adani Total Gas","symbol":"ADANITRANS.NS"},
+  {"name":"Rama Steel","symbol":"RAMASTEEL.NS"},
+  {"name":"Rama Steel","symbol":"RAMASTEEL.BO"}
 ]

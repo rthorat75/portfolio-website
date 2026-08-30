@@ -41,8 +41,12 @@ const fallbackStockList = [
   { name: "Mahindra & Mahindra", symbol: "M&M.BO" },
   { name: "Tata Steel", symbol: "TATASTEEL.NS" },
   { name: "Tata Steel", symbol: "TATASTEEL.BO" },
+  { name: "Subex", symbol: "SUBEX.NS" },
+  { name: "Subex", symbol: "SUBEX.BO" },
   { name: "Deltacorp", symbol: "DELTACORP.NS" },
   { name: "Deltacorp", symbol: "DELTACORP.BO" },
+  { name: "Rama Steel", symbol: "RAMASTEEL.NS" },
+  { name: "Rama Steel", symbol: "RAMASTEEL.BO" },
   { name: "CESC", symbol: "CESC.NS" },
   { name: "CESC", symbol: "CESC.BO" },
   { name: "JSW Steel", symbol: "JSWSTEEL.NS" },
@@ -171,6 +175,17 @@ async function fetchChartData(symbol) {
     return { localOnly: true, data: getLocalPriceSeries(key) };
   }
 
+  if (location.hostname.includes("vercel.app") || location.hostname.includes("netlify.app")) {
+    try {
+      const response = await fetch(`/api/price?symbol=${encodeURIComponent(symbol)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`Backend price request failed: ${response.status}`);
+      return { localOnly: false, data: await response.json() };
+    } catch (err) {
+      console.warn("Backend price API unavailable. Falling back to local data.", err);
+      return { localOnly: true, data: getLocalPriceSeries(key) };
+    }
+  }
+
   const directUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo`;
 
   try {
@@ -187,6 +202,18 @@ async function fetchChartData(symbol) {
       console.warn("Proxy fetch also failed. Falling back to local prices.", proxyError);
       return { localOnly: true, data: getLocalPriceSeries(key) };
     }
+  }
+}
+
+async function fetchBackendStockMatches(query) {
+  try {
+    const response = await fetch(`/api/stocks?q=${encodeURIComponent(query)}`);
+    if (!response.ok) return [];
+    const result = await response.json();
+    return Array.isArray(result.items) ? result.items : [];
+  } catch (err) {
+    console.warn("Backend stock lookup unavailable.", err);
+    return [];
   }
 }
 
@@ -244,12 +271,41 @@ async function loadStockList() {
   }
 }
 
+function normalizeSearchText(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getStockSearchScore(stock, query) {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return 0;
+
+  const rawSymbol = stock.symbol.replace(/\.(NS|BO)$/i, "").toUpperCase();
+  const symbol = rawSymbol.toUpperCase();
+  const name = stock.name.toLowerCase();
+  const normalizedQuery = normalizeSearchText(trimmedQuery);
+  const normalizedSymbol = normalizeSearchText(symbol);
+  const normalizedName = normalizeSearchText(name);
+
+  if (symbol === trimmedQuery.toUpperCase()) return 1000;
+  if (symbol.startsWith(trimmedQuery.toUpperCase())) return 950;
+  if (normalizedSymbol.includes(normalizedQuery)) return 800;
+  if (name === trimmedQuery.toLowerCase()) return 700;
+  if (name.startsWith(trimmedQuery.toLowerCase())) return 650;
+  if (normalizedName.includes(normalizedQuery)) return 500;
+
+  const words = name.split(/\s+/);
+  const keywordMatch = words.some(word => word.toLowerCase().startsWith(trimmedQuery.toLowerCase()));
+  if (keywordMatch) return 350;
+
+  return 0;
+}
+
 function selectStock(stock) {
   const stockInput = document.getElementById("stockInput");
   const suggestions = document.getElementById("suggestions");
 
   if (stockInput) {
-    stockInput.value = stock.symbol.replace(".NS", "");
+    stockInput.value = stock.symbol.replace(/\.(NS|BO)$/i, "");
   }
 
   if (suggestions) {
@@ -265,20 +321,50 @@ function setupStockSearch() {
 
   if (!stockInput || !suggestions) return;
 
-  stockInput.addEventListener("input", function () {
-    const input = this.value.trim().toLowerCase();
+  stockInput.addEventListener("input", async function () {
+    const input = this.value.trim();
     suggestions.innerHTML = "";
 
-    if (input.length === 0) return;
+    if (!input) return;
 
-    stockList.forEach(stock => {
-      const searchableText = `${stock.name} ${stock.symbol.replace(".NS", "")}`.toLowerCase();
-      if (searchableText.includes(input)) {
-        const div = document.createElement("div");
-        div.textContent = `${stock.name} (${stock.symbol.replace(".NS", "")})`;
-        div.onclick = () => selectStock(stock);
-        suggestions.appendChild(div);
-      }
+    let matches = [];
+
+    if (location.hostname.includes("vercel.app") || location.hostname.includes("netlify.app")) {
+      const backendMatches = await fetchBackendStockMatches(input);
+      matches = backendMatches.map(item => ({ stock: item }));
+    }
+
+    if (!matches.length) {
+      matches = stockList
+        .map(stock => ({ stock, score: getStockSearchScore(stock, input) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return a.stock.name.localeCompare(b.stock.name);
+        })
+        .slice(0, 8);
+    }
+
+    if (!matches.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-item";
+      empty.textContent = "No matching stock found";
+      suggestions.appendChild(empty);
+      return;
+    }
+
+    matches.forEach(({ stock }) => {
+      const div = document.createElement("div");
+      div.className = "suggestion-item";
+      const symbolText = stock.symbol.replace(/\.(NS|BO)$/i, "");
+      div.innerHTML = `
+        <div class="suggestion-main">
+          <span class="suggestion-symbol">${symbolText}</span>
+          <span class="suggestion-name">${stock.name}</span>
+        </div>
+      `;
+      div.onclick = () => selectStock(stock);
+      suggestions.appendChild(div);
     });
   });
 
@@ -327,17 +413,19 @@ async function loadStock() {
 
   if (!stockInput || !signalBox) return;
 
-  const input = stockInput.value.trim().toUpperCase();
+  const input = stockInput.value.trim().toUpperCase().replace(/\.(NS|BO)$/i, "");
 
   if (!input) {
     setSignal("Please enter a stock symbol.", "hold");
     return;
   }
 
-  let stock = stockList.find(s => s.symbol.toUpperCase() === input + ".NS");
+  let stock = stockList.find(s => s.symbol.toUpperCase() === input + ".NS")
+    || stockList.find(s => s.symbol.toUpperCase() === input + ".BO");
 
   if (!stock) {
-    stock = stockList.find(s => s.symbol.toUpperCase().includes(input + ".NS"));
+    stock = stockList.find(s => s.symbol.toUpperCase().includes(input + ".NS"))
+      || stockList.find(s => s.symbol.toUpperCase().includes(input + ".BO"));
   }
 
   if (!stock) {
