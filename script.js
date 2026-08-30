@@ -206,7 +206,7 @@ async function loadStockList() {
       // Local JSON may be blocked when opened as a file; fallback to built-in list.
     }
 
-    if (location.protocol !== "file:") {
+    if (location.protocol !== "file:" && stockList.length < 200) {
       try {
         const response = await fetchWithProxy("https://nsearchives.nseindia.com/content/equities/sec_list.csv");
         const text = await response.text();
@@ -226,7 +226,7 @@ async function loadStockList() {
           }
         });
       } catch (err) {
-        console.warn("Remote NSE list unavailable; using built-in list.", err);
+        console.warn("Remote NSE list unavailable; using built-in and local list.", err);
       }
     }
 
