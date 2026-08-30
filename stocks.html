@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📈 Indian Stock Signal Generator (NSE)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #f9f9f9; }
+    input { padding: 10px; font-size: 16px; width: 250px; }
+    #suggestions { border: 1px solid #ccc; max-height: 150px; overflow-y: auto; width: 250px; margin: auto; background: #fff; }
+    #suggestions div { padding: 8px; cursor: pointer; }
+    #suggestions div:hover { background: #eee; }
+    #signalBox { margin-top: 20px; font-size: 18px; font-weight: bold; color: #2c3e50; }
+    #signalBox.buy { color: green; }
+    #signalBox.sell { color: red; }
+    #signalBox.hold { color: #d97706; }
+    canvas { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>📈 Indian Stock Signal Generator (NSE)</h1>
+
+  <input type="text" id="stockInput" placeholder="Enter NSE symbol (e.g. WIPRO)">
+  <div id="suggestions"></div>
+  <button onclick="loadStock()">Load Stock</button>
+
+  <canvas id="stockChart" width="800" height="400"></canvas>
+
+  <div id="signalBox" class="signalBox hold">Enter a stock above to see signals</div>
+
+  <script src="script.js"></script>
+</body>
+</html>

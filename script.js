@@ -1,15 +1,361 @@
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  background-color: #f0f0f0;
+let chart;
+let stockList = [];
+
+const fallbackStockList = [
+  { name: "Reliance Industries", symbol: "RELIANCE.NS" },
+  { name: "Reliance Industries", symbol: "RELIANCE.BO" },
+  { name: "Tata Consultancy Services", symbol: "TCS.NS" },
+  { name: "Tata Consultancy Services", symbol: "TCS.BO" },
+  { name: "Infosys", symbol: "INFY.NS" },
+  { name: "Infosys", symbol: "INFY.BO" },
+  { name: "HDFC Bank", symbol: "HDFCBANK.NS" },
+  { name: "HDFC Bank", symbol: "HDFCBANK.BO" },
+  { name: "ICICI Bank", symbol: "ICICIBANK.NS" },
+  { name: "ICICI Bank", symbol: "ICICIBANK.BO" },
+  { name: "State Bank of India", symbol: "SBIN.NS" },
+  { name: "State Bank of India", symbol: "SBIN.BO" },
+  { name: "ITC", symbol: "ITC.NS" },
+  { name: "ITC", symbol: "ITC.BO" },
+  { name: "Axis Bank", symbol: "AXISBANK.NS" },
+  { name: "Axis Bank", symbol: "AXISBANK.BO" },
+  { name: "Wipro", symbol: "WIPRO.NS" },
+  { name: "Wipro", symbol: "WIPRO.BO" },
+  { name: "Vedanta", symbol: "VEDL.NS" },
+  { name: "Vedanta", symbol: "VEDL.BO" },
+  { name: "Larsen & Toubro", symbol: "LT.NS" },
+  { name: "Larsen & Toubro", symbol: "LT.BO" },
+  { name: "Tata Motors", symbol: "TATAMOTORS.NS" },
+  { name: "Tata Motors", symbol: "TATAMOTORS.BO" },
+  { name: "Bharti Airtel", symbol: "BHARTIARTL.NS" },
+  { name: "Bharti Airtel", symbol: "BHARTIARTL.BO" },
+  { name: "Maruti Suzuki", symbol: "MARUTI.NS" },
+  { name: "Maruti Suzuki", symbol: "MARUTI.BO" },
+  { name: "Sun Pharmaceutical", symbol: "SUNPHARMA.NS" },
+  { name: "Sun Pharmaceutical", symbol: "SUNPHARMA.BO" },
+  { name: "Cipla", symbol: "CIPLA.NS" },
+  { name: "Cipla", symbol: "CIPLA.BO" },
+  { name: "Dr Reddy's", symbol: "DRREDDY.NS" },
+  { name: "Dr Reddy's", symbol: "DRREDDY.BO" },
+  { name: "Mahindra & Mahindra", symbol: "M&M.NS" },
+  { name: "Mahindra & Mahindra", symbol: "M&M.BO" },
+  { name: "Tata Steel", symbol: "TATASTEEL.NS" },
+  { name: "Tata Steel", symbol: "TATASTEEL.BO" },
+  { name: "Deltacorp", symbol: "DELTACORP.NS" },
+  { name: "Deltacorp", symbol: "DELTACORP.BO" },
+  { name: "CESC", symbol: "CESC.NS" },
+  { name: "CESC", symbol: "CESC.BO" },
+  { name: "JSW Steel", symbol: "JSWSTEEL.NS" },
+  { name: "JSW Steel", symbol: "JSWSTEEL.BO" },
+  { name: "NTPC", symbol: "NTPC.NS" },
+  { name: "NTPC", symbol: "NTPC.BO" },
+  { name: "Power Grid", symbol: "POWERGRID.NS" },
+  { name: "Power Grid", symbol: "POWERGRID.BO" },
+  { name: "UltraTech Cement", symbol: "ULTRACEMCO.NS" },
+  { name: "UltraTech Cement", symbol: "ULTRACEMCO.BO" },
+  { name: "Hindustan Unilever", symbol: "HINDUNILVR.NS" },
+  { name: "Hindustan Unilever", symbol: "HINDUNILVR.BO" },
+  { name: "Kotak Mahindra Bank", symbol: "KOTAKBANK.NS" },
+  { name: "Kotak Mahindra Bank", symbol: "KOTAKBANK.BO" },
+  { name: "IndusInd Bank", symbol: "INDUSINDBK.NS" },
+  { name: "IndusInd Bank", symbol: "INDUSINDBK.BO" },
+  { name: "Asian Paints", symbol: "ASIANPAINT.NS" },
+  { name: "Asian Paints", symbol: "ASIANPAINT.BO" },
+  { name: "Bajaj Finance", symbol: "BAJFINANCE.NS" },
+  { name: "Bajaj Finance", symbol: "BAJFINANCE.BO" },
+  { name: "HCLTech", symbol: "HCLTECH.NS" },
+  { name: "HCLTech", symbol: "HCLTECH.BO" },
+  { name: "Tech Mahindra", symbol: "TECHM.NS" },
+  { name: "Tech Mahindra", symbol: "TECHM.BO" },
+  { name: "Oil & Natural Gas", symbol: "ONGC.NS" },
+  { name: "Oil & Natural Gas", symbol: "ONGC.BO" },
+  { name: "Indian Oil", symbol: "IOC.NS" },
+  { name: "Indian Oil", symbol: "IOC.BO" },
+  { name: "Bharat Electronics", symbol: "BEL.NS" },
+  { name: "Bharat Electronics", symbol: "BEL.BO" },
+  { name: "Titan Company", symbol: "TITAN.NS" },
+  { name: "Titan Company", symbol: "TITAN.BO" }
+];
+
+const fallbackPriceMap = {
+  "RELIANCE.NS": [2420, 2440, 2462, 2435, 2480, 2512, 2508, 2496, 2525, 2542, 2561, 2578, 2585, 2590, 2604, 2612, 2620, 2635, 2648, 2662, 2674, 2661, 2650, 2638, 2649, 2667, 2685, 2678, 2692, 2708],
+  "TCS.NS": [3600, 3598, 3585, 3608, 3625, 3650, 3671, 3655, 3647, 3662, 3678, 3690, 3706, 3722, 3711, 3688, 3675, 3694, 3715, 3730, 3745, 3765, 3758, 3742, 3728, 3738, 3750, 3772, 3788, 3805],
+  "INFY.NS": [1545, 1552, 1560, 1568, 1562, 1570, 1582, 1590, 1584, 1596, 1608, 1615, 1623, 1638, 1644, 1637, 1628, 1632, 1646, 1658, 1665, 1659, 1668, 1676, 1682, 1675, 1688, 1700, 1715, 1728],
+  "HDFCBANK.NS": [1665, 1670, 1662, 1678, 1685, 1692, 1701, 1712, 1704, 1715, 1720, 1732, 1738, 1740, 1735, 1748, 1756, 1762, 1768, 1775, 1782, 1776, 1769, 1774, 1785, 1792, 1801, 1797, 1805, 1818],
+  "ICICIBANK.NS": [1015, 1018, 1024, 1028, 1030, 1038, 1042, 1045, 1049, 1058, 1064, 1059, 1068, 1076, 1080, 1085, 1080, 1088, 1096, 1104, 1108, 1102, 1110, 1118, 1126, 1132, 1129, 1138, 1148, 1155],
+  "SBIN.NS": [820, 822, 828, 834, 839, 845, 851, 858, 864, 868, 873, 882, 876, 870, 877, 884, 890, 896, 902, 908, 915, 922, 928, 931, 940, 947, 955, 949, 962, 974],
+  "ITC.NS": [450, 452, 448, 456, 460, 464, 469, 472, 468, 470, 474, 478, 480, 483, 487, 491, 488, 486, 489, 494, 500, 497, 495, 499, 503, 508, 514, 510, 505, 512],
+  "AXISBANK.NS": [1088, 1090, 1082, 1095, 1101, 1108, 1114, 1117, 1122, 1129, 1135, 1138, 1141, 1145, 1150, 1146, 1142, 1147, 1154, 1160, 1158, 1165, 1172, 1180, 1174, 1183, 1192, 1204, 1211, 1220],
+  "WIPRO.NS": [420, 424, 427, 431, 429, 433, 436, 438, 440, 437, 442, 448, 451, 447, 445, 449, 454, 457, 461, 465, 469, 472, 468, 465, 470, 475, 482, 479, 485, 490],
+  "VEDL.NS": [458, 462, 454, 447, 450, 455, 459, 463, 467, 470, 466, 461, 455, 448, 452, 459, 464, 468, 472, 476, 473, 469, 463, 470, 477, 481, 486, 492, 498, 505]
+};
+
+function generateRecentDateLabels(length) {
+  const labels = [];
+  const today = new Date();
+
+  for (let i = length - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    labels.push(date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+  }
+
+  return labels;
 }
-h1 {
-  color: #2c3e50;
+
+function dedupeStockList(list) {
+  const uniqueMap = new Map();
+
+  list.forEach(stock => {
+    const key = `${stock.name.toLowerCase()}|${stock.symbol.toUpperCase()}`;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, stock);
+    }
+  });
+
+  return Array.from(uniqueMap.values());
 }
-button {
-  padding: 10px 20px;
-  background: #3498db;
-  color: white;
-  border: none;
-  cursor: pointer;
+
+function setSignal(message, type = "hold") {
+  const signalBox = document.getElementById("signalBox");
+  if (!signalBox) return;
+
+  signalBox.className = "signalBox " + type;
+  signalBox.innerText = message;
+}
+
+function fetchWithProxy(url) {
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  return fetch(proxyUrl);
+}
+
+async function loadStockList() {
+  try {
+    stockList = fallbackStockList.slice();
+
+    try {
+      const localResponse = await fetch("stocks.json", { cache: "no-store" });
+      if (localResponse.ok) {
+        const localData = await localResponse.json();
+        if (Array.isArray(localData) && localData.length) {
+          stockList = dedupeStockList([...stockList, ...localData]);
+        }
+      }
+    } catch (_) {
+      // Local JSON may be blocked when opened as a file; fallback to built-in list.
+    }
+
+    if (location.protocol !== "file:") {
+      try {
+        const response = await fetchWithProxy("https://nsearchives.nseindia.com/content/equities/sec_list.csv");
+        const text = await response.text();
+        const rows = text.split(/\r?\n/).slice(1);
+
+        rows.forEach(row => {
+          const cols = row.split(",");
+          if (cols.length > 2) {
+            const symbol = cols[0].trim();
+            const name = cols[2].trim();
+            if (symbol && name && !symbol.includes("SYMBOL")) {
+              const found = stockList.some(item => item.symbol.toUpperCase() === (symbol + ".NS").toUpperCase());
+              if (!found) {
+                stockList.push({ name: name, symbol: symbol + ".NS" });
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Remote NSE list unavailable; using built-in list.", err);
+      }
+    }
+
+    stockList = dedupeStockList(stockList);
+
+    if (!stockList.length) {
+      stockList = fallbackStockList.slice();
+    }
+
+    console.log("Loaded stock list:", stockList.length);
+  } catch (err) {
+    console.error("Error loading stock list", err);
+    stockList = fallbackStockList.slice();
+    setSignal("Using local stock list because remote stock data is blocked in this browser.", "hold");
+  }
+}
+
+function selectStock(stock) {
+  const stockInput = document.getElementById("stockInput");
+  const suggestions = document.getElementById("suggestions");
+
+  if (stockInput) {
+    stockInput.value = stock.symbol.replace(".NS", "");
+  }
+
+  if (suggestions) {
+    suggestions.innerHTML = "";
+  }
+
+  loadStock();
+}
+
+function setupStockSearch() {
+  const stockInput = document.getElementById("stockInput");
+  const suggestions = document.getElementById("suggestions");
+
+  if (!stockInput || !suggestions) return;
+
+  stockInput.addEventListener("input", function () {
+    const input = this.value.trim().toLowerCase();
+    suggestions.innerHTML = "";
+
+    if (input.length === 0) return;
+
+    stockList.forEach(stock => {
+      const searchableText = `${stock.name} ${stock.symbol.replace(".NS", "")}`.toLowerCase();
+      if (searchableText.includes(input)) {
+        const div = document.createElement("div");
+        div.textContent = `${stock.name} (${stock.symbol.replace(".NS", "")})`;
+        div.onclick = () => selectStock(stock);
+        suggestions.appendChild(div);
+      }
+    });
+  });
+
+  stockInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      loadStock();
+    }
+  });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  setupStockSearch();
+  loadStockList();
+});
+
+function calculateRSI(prices, period = 14) {
+  let gains = 0, losses = 0;
+
+  for (let i = 1; i < Math.min(period, prices.length); i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff >= 0) gains += diff; else losses += Math.abs(diff);
+  }
+
+  const avgGain = gains / Math.max(1, Math.min(period, prices.length) - 1);
+  const avgLoss = losses / Math.max(1, Math.min(period, prices.length) - 1);
+  const rs = avgLoss === 0 ? 1 : avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+function movingAverage(prices, period = 20) {
+  const data = prices.slice(-period);
+  return data.reduce((a, b) => a + b, 0) / Math.max(1, data.length);
+}
+
+function calculateMACD(prices, short = 12, long = 26, signal = 9) {
+  const emaShort = movingAverage(prices.slice(-short), short);
+  const emaLong = movingAverage(prices.slice(-long), long);
+  const macd = emaShort - emaLong;
+  const signalLine = movingAverage(prices.slice(-signal), signal);
+  return { macd, signalLine };
+}
+
+async function loadStock() {
+  const stockInput = document.getElementById("stockInput");
+  const signalBox = document.getElementById("signalBox");
+
+  if (!stockInput || !signalBox) return;
+
+  const input = stockInput.value.trim().toUpperCase();
+
+  if (!input) {
+    setSignal("Please enter a stock symbol.", "hold");
+    return;
+  }
+
+  let stock = stockList.find(s => s.symbol.toUpperCase() === input + ".NS");
+
+  if (!stock) {
+    stock = stockList.find(s => s.symbol.toUpperCase().includes(input + ".NS"));
+  }
+
+  if (!stock) {
+    const fallback = fallbackStockList.find(s => s.symbol.toUpperCase().includes(input));
+    if (fallback) {
+      stock = fallback;
+    }
+  }
+
+  if (!stock) {
+    setSignal("Invalid symbol. Try again.", "hold");
+    return;
+  }
+
+  let validPrices = fallbackPriceMap[stock.symbol.toUpperCase()] || null;
+  let labels = null;
+
+  if (!validPrices) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stock.symbol}?interval=1d&range=3mo`;
+
+    try {
+      const response = await fetchWithProxy(url);
+      const data = await response.json();
+
+      if (!data.chart || !data.chart.result || !data.chart.result[0]) {
+        setSignal("No data found for this symbol.", "hold");
+        return;
+      }
+
+      const prices = data.chart.result[0].indicators.quote[0].close;
+      validPrices = prices.filter(price => typeof price === "number" && !Number.isNaN(price));
+      labels = data.chart.result[0].timestamp.map(ts => new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    } catch (err) {
+      console.error("Error loading data", err);
+      validPrices = fallbackPriceMap[stock.symbol.toUpperCase()] || fallbackPriceMap["TCS.NS"];
+      labels = generateRecentDateLabels(validPrices.length);
+    }
+  }
+
+  if (!validPrices || !validPrices.length) {
+    setSignal("No valid price data available for this symbol.", "hold");
+    return;
+  }
+
+  if (!labels || labels.length !== validPrices.length) {
+    labels = generateRecentDateLabels(validPrices.length);
+  }
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById("stockChart"), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: stock.symbol,
+        data: validPrices,
+        borderColor: 'blue',
+        fill: false
+      }]
+    }
+  });
+
+  const latestPrice = validPrices[validPrices.length - 1];
+  const rsi = calculateRSI(validPrices);
+  const ma20 = movingAverage(validPrices, 20);
+  const { macd, signalLine } = calculateMACD(validPrices);
+
+  let signalText;
+  let signalType = "hold";
+
+  if (rsi < 30 && macd > signalLine && latestPrice > ma20) {
+    signalText = `BUY at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bullish)`;
+    signalType = "buy";
+  } else if (rsi > 70 && macd < signalLine && latestPrice < ma20) {
+    signalText = `SELL at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bearish)`;
+    signalType = "sell";
+  } else {
+    signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD neutral)`;
+  }
+
+  setSignal(`Signal: ${signalText}`, signalType);
 }
