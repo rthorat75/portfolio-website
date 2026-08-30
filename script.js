@@ -525,11 +525,26 @@ async function loadStock() {
   let signalText;
   let signalType = "hold";
 
-  if (rsi < 30 && macd > signalLine && latestPrice > ma20) {
-    signalText = `BUY at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bullish)`;
+  const priceAboveMA = latestPrice > ma20;
+  const priceBelowMA = latestPrice < ma20;
+  const macdBullish = macd > signalLine;
+  const macdBearish = macd < signalLine;
+  const rsiOversold = rsi < 40;
+  const rsiOverbought = rsi > 60;
+
+  let score = 0;
+  if (priceAboveMA) score += 1;
+  if (priceBelowMA) score -= 1;
+  if (macdBullish) score += 1;
+  if (macdBearish) score -= 1;
+  if (rsiOversold) score += 1;
+  if (rsiOverbought) score -= 1;
+
+  if (score >= 2) {
+    signalText = `BUY at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bullish, trend up)`;
     signalType = "buy";
-  } else if (rsi > 70 && macd < signalLine && latestPrice < ma20) {
-    signalText = `SELL at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bearish)`;
+  } else if (score <= -2) {
+    signalText = `SELL at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bearish, trend down)`;
     signalType = "sell";
   } else {
     signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD neutral)`;
