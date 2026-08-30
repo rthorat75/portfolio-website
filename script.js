@@ -179,7 +179,11 @@ async function fetchChartData(symbol) {
     try {
       const response = await fetch(`/api/price?symbol=${encodeURIComponent(symbol)}`, { cache: "no-store" });
       if (!response.ok) throw new Error(`Backend price request failed: ${response.status}`);
-      return { localOnly: false, data: await response.json() };
+      const data = await response.json();
+      if (Array.isArray(data.prices) && Array.isArray(data.labels)) {
+        return { localOnly: data.localOnly === true, data };
+      }
+      throw new Error('Backend response missing price arrays');
     } catch (err) {
       console.warn("Backend price API unavailable. Falling back to local data.", err);
       return { localOnly: true, data: getLocalPriceSeries(key) };
@@ -454,7 +458,7 @@ async function loadStock() {
       const response = await fetchChartData(stock.symbol);
       const result = response.data;
 
-      if (response.localOnly) {
+      if (response.localOnly || (Array.isArray(result.prices) && Array.isArray(result.labels))) {
         validPrices = result.prices;
         labels = result.labels;
       } else if (!result.chart || !result.chart.result || !result.chart.result[0]) {
