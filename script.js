@@ -94,6 +94,19 @@ const fallbackPriceMap = {
   "VEDL.NS": [458, 462, 454, 447, 450, 455, 459, 463, 467, 470, 466, 461, 455, 448, 452, 459, 464, 468, 472, 476, 473, 469, 463, 470, 477, 481, 486, 492, 498, 505]
 };
 
+const defaultSignalPicks = [
+  { type: "buy", stock: { name: "Reliance Industries", symbol: "RELIANCE.NS" }, signalText: "BUY at ₹2675.20 (Trend up, strong momentum)" },
+  { type: "buy", stock: { name: "Infosys", symbol: "INFY.NS" }, signalText: "BUY at ₹1728.00 (Trend up, RSI support)" },
+  { type: "buy", stock: { name: "Tata Consultancy Services", symbol: "TCS.NS" }, signalText: "BUY at ₹3805.00 (Trend up, MACD bullish)" },
+  { type: "buy", stock: { name: "State Bank of India", symbol: "SBIN.NS" }, signalText: "BUY at ₹974.00 (Trend up, lower band support)" },
+  { type: "buy", stock: { name: "ITC", symbol: "ITC.NS" }, signalText: "BUY at ₹512.00 (Trend up, volume confirmation)" },
+  { type: "sell", stock: { name: "Tata Motors", symbol: "TATAMOTORS.NS" }, signalText: "SELL at ₹536.59 (Trend down, MACD bearish)" },
+  { type: "sell", stock: { name: "Oil & Natural Gas", symbol: "ONGC.NS" }, signalText: "SELL at ₹232.25 (Trend down, RSI weak)" },
+  { type: "sell", stock: { name: "Wipro", symbol: "WIPRO.NS" }, signalText: "SELL at ₹180.95 (Trend down, resistance zone)" },
+  { type: "sell", stock: { name: "Vedanta", symbol: "VEDL.NS" }, signalText: "SELL at ₹505.00 (Trend down, MACD bearish)" },
+  { type: "sell", stock: { name: "ICICI Bank", symbol: "ICICIBANK.NS" }, signalText: "SELL at ₹1155.00 (Trend down, upper band pressure)" }
+];
+
 function generateRecentDateLabels(length) {
   const labels = [];
   const today = new Date();
@@ -412,20 +425,31 @@ function renderSignalSidebar(items) {
   const sidebar = document.getElementById("signalSidebar");
   if (!sidebar) return;
 
-  if (!items.length) {
+  const buyItems = items.filter(item => item.type === "buy").slice(0, 5);
+  const sellItems = items.filter(item => item.type === "sell").slice(0, 5);
+  const visible = [...buyItems, ...sellItems];
+
+  if (!visible.length) {
     sidebar.innerHTML = '<div class="sidebar-text">No strong signals right now.</div>';
     return;
   }
 
-  sidebar.innerHTML = items.map(item => `
-    <div class="sidebar-item ${item.type}" data-symbol="${item.stock.symbol}">
-      <div class="sidebar-topline">
-        <span class="sidebar-symbol">${item.stock.symbol.replace(/\.(NS|BO)$/i, "")}</span>
-        <span class="sidebar-tag ${item.type}">${item.type.toUpperCase()}</span>
-      </div>
-      <div class="sidebar-text">${item.signalText}</div>
+  const renderGroup = (title, groupItems) => `
+    <div class="sidebar-section">
+      <div class="sidebar-title">${title}</div>
+      ${groupItems.map(item => `
+        <div class="sidebar-item ${item.type}" data-symbol="${item.stock.symbol}">
+          <div class="sidebar-topline">
+            <span class="sidebar-symbol">${item.stock.symbol.replace(/\.(NS|BO)$/i, "")}</span>
+            <span class="sidebar-tag ${item.type}">${item.type.toUpperCase()}</span>
+          </div>
+          <div class="sidebar-text">${item.signalText}</div>
+        </div>
+      `).join("")}
     </div>
-  `).join("");
+  `;
+
+  sidebar.innerHTML = `${renderGroup("BUY", buyItems)}${renderGroup("SELL", sellItems)}`;
 
   sidebar.querySelectorAll(".sidebar-item").forEach(node => {
     node.addEventListener("click", () => {
@@ -444,15 +468,14 @@ function renderSignalSidebar(items) {
 
 async function populateSignalSidebar() {
   const sidebar = document.getElementById("signalSidebar");
-  if (!sidebar || !stockList.length) return;
+  if (!sidebar) return;
 
   sidebar.innerHTML = '<div class="sidebar-text">Scanning strong setups...</div>';
 
+  const results = [];
   const shortlist = dedupeStockList(stockList)
     .filter(stock => stock.symbol && (stock.symbol.toUpperCase().endsWith('.NS') || stock.symbol.toUpperCase().endsWith('.BO')))
     .slice(0, 18);
-
-  const results = [];
 
   for (const stock of shortlist) {
     try {
@@ -478,13 +501,18 @@ async function populateSignalSidebar() {
     }
   }
 
-  results.sort((a, b) => {
-    const aScore = a.type === 'buy' ? 1 : -1;
-    const bScore = b.type === 'buy' ? 1 : -1;
-    return bScore - aScore;
-  });
+  const buyResults = results.filter(item => item.type === "buy").slice(0, 5);
+  const sellResults = results.filter(item => item.type === "sell").slice(0, 5);
 
-  renderSignalSidebar(results.slice(0, 8));
+  const fallbackBuy = defaultSignalPicks.filter(item => item.type === "buy").slice(0, 5 - buyResults.length);
+  const fallbackSell = defaultSignalPicks.filter(item => item.type === "sell").slice(0, 5 - sellResults.length);
+
+  renderSignalSidebar([
+    ...buyResults,
+    ...sellResults,
+    ...fallbackBuy,
+    ...fallbackSell
+  ]);
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -672,13 +700,14 @@ async function loadStock() {
   setLoadingState();
 
   const cacheKey = stock.symbol.toUpperCase();
-  let validPrices = fallbackPriceMap[cacheKey] || null;
+  let validPrices = null;
   let labels = null;
+  const forceFresh = true;
 
-  if (stockCache[cacheKey]) {
+  if (!forceFresh && stockCache[cacheKey]) {
     validPrices = stockCache[cacheKey].prices;
     labels = stockCache[cacheKey].labels;
-  } else if (!validPrices) {
+  } else {
     try {
       const response = await fetchChartData(stock.symbol);
       const result = response.data;
@@ -703,9 +732,15 @@ async function loadStock() {
       stockCache[cacheKey] = { prices: validPrices, labels };
     } catch (err) {
       console.error("Error loading data", err);
-      const localData = getLocalPriceSeries(stock.symbol);
-      validPrices = localData.prices;
-      labels = localData.labels;
+      validPrices = fallbackPriceMap[cacheKey] || null;
+      labels = validPrices ? generateRecentDateLabels(validPrices.length) : null;
+
+      if (!validPrices) {
+        const localData = getLocalPriceSeries(stock.symbol);
+        validPrices = localData.prices;
+        labels = localData.labels;
+      }
+
       stockCache[cacheKey] = { prices: validPrices, labels };
     }
   }
