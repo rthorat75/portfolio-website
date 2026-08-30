@@ -398,15 +398,19 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function calculateRSI(prices, period = 14) {
-  let gains = 0, losses = 0;
+  if (prices.length < 2) return 50;
 
-  for (let i = 1; i < Math.min(period, prices.length); i++) {
-    const diff = prices[i] - prices[i - 1];
+  let gains = 0;
+  let losses = 0;
+
+  const totalPeriods = Math.min(period, prices.length - 1);
+  for (let i = 1; i <= totalPeriods; i++) {
+    const diff = prices[prices.length - totalPeriods + i - 1] - prices[prices.length - totalPeriods + i - 2];
     if (diff >= 0) gains += diff; else losses += Math.abs(diff);
   }
 
-  const avgGain = gains / Math.max(1, Math.min(period, prices.length) - 1);
-  const avgLoss = losses / Math.max(1, Math.min(period, prices.length) - 1);
+  const avgGain = gains / Math.max(1, totalPeriods);
+  const avgLoss = losses / Math.max(1, totalPeriods);
   const rs = avgLoss === 0 ? 1 : avgGain / avgLoss;
   return 100 - (100 / (1 + rs));
 }
@@ -416,12 +420,44 @@ function movingAverage(prices, period = 20) {
   return data.reduce((a, b) => a + b, 0) / Math.max(1, data.length);
 }
 
+function calculateEMA(prices, period = 12) {
+  if (!prices.length) return 0;
+  if (prices.length === 1) return prices[0];
+
+  const multiplier = 2 / (period + 1);
+  let ema = prices[0];
+
+  for (let i = 1; i < prices.length; i++) {
+    ema = (prices[i] - ema) * multiplier + ema;
+  }
+
+  return ema;
+}
+
 function calculateMACD(prices, short = 12, long = 26, signal = 9) {
-  const emaShort = movingAverage(prices.slice(-short), short);
-  const emaLong = movingAverage(prices.slice(-long), long);
+  const emaShort = calculateEMA(prices.slice(-short), short);
+  const emaLong = calculateEMA(prices.slice(-long), long);
   const macd = emaShort - emaLong;
-  const signalLine = movingAverage(prices.slice(-signal), signal);
+  const recentPrices = prices.slice(-signal);
+  const signalLine = recentPrices.length ? calculateEMA(recentPrices, signal) : macd;
   return { macd, signalLine };
+}
+
+function calculateBollingerBands(prices, period = 20, stdDevMultiplier = 2) {
+  const values = prices.slice(-period);
+  const mid = movingAverage(values, period);
+  const variance = values.reduce((sum, price) => sum + (price - mid) ** 2, 0) / Math.max(1, values.length);
+  const stdDev = Math.sqrt(variance);
+  return {
+    middle: mid,
+    upper: mid + (stdDevMultiplier * stdDev),
+    lower: mid - (stdDevMultiplier * stdDev)
+  };
+}
+
+function calculateVWAP(prices) {
+  if (!prices.length) return 0;
+  return prices.reduce((sum, price) => sum + price, 0) / prices.length;
 }
 
 async function loadStock() {
@@ -520,34 +556,51 @@ async function loadStock() {
   const latestPrice = validPrices[validPrices.length - 1];
   const rsi = calculateRSI(validPrices);
   const ma20 = movingAverage(validPrices, 20);
+  const ma10 = movingAverage(validPrices, 10);
+  const ema12 = calculateEMA(validPrices, 12);
+  const ema26 = calculateEMA(validPrices, 26);
   const { macd, signalLine } = calculateMACD(validPrices);
-
-  let signalText;
-  let signalType = "hold";
+  const bollinger = calculateBollingerBands(validPrices, 20);
+  const vwap = calculateVWAP(validPrices.slice(-20));
 
   const priceAboveMA = latestPrice > ma20;
   const priceBelowMA = latestPrice < ma20;
+  const shortTrendUp = ma10 > ma20;
+  const shortTrendDown = ma10 < ma20;
+  const emaTrendUp = ema12 > ema26;
+  const emaTrendDown = ema12 < ema26;
   const macdBullish = macd > signalLine;
   const macdBearish = macd < signalLine;
-  const rsiOversold = rsi < 40;
-  const rsiOverbought = rsi > 60;
+  const priceNearLowerBand = latestPrice <= bollinger.lower;
+  const priceNearUpperBand = latestPrice >= bollinger.upper;
+  const priceAboveVWAP = latestPrice > vwap;
+  const priceBelowVWAP = latestPrice < vwap;
 
   let score = 0;
-  if (priceAboveMA) score += 1;
-  if (priceBelowMA) score -= 1;
-  if (macdBullish) score += 1;
-  if (macdBearish) score -= 1;
-  if (rsiOversold) score += 1;
-  if (rsiOverbought) score -= 1;
 
-  if (score >= 2) {
-    signalText = `BUY at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bullish, trend up)`;
+  if (priceAboveMA) score += 2;
+  if (priceBelowMA) score -= 2;
+  if (shortTrendUp) score += 1;
+  if (shortTrendDown) score -= 1;
+  if (emaTrendUp) score += 2;
+  if (emaTrendDown) score -= 2;
+  if (macdBullish) score += 2;
+  if (macdBearish) score -= 2;
+  if (rsi < 30) score += 1;
+  if (rsi > 70) score -= 1;
+  if (priceNearLowerBand) score += 1;
+  if (priceNearUpperBand) score -= 1;
+  if (priceAboveVWAP) score += 1;
+  if (priceBelowVWAP) score -= 1;
+
+  if (score >= 4) {
+    signalText = `BUY at ₹${latestPrice.toFixed(2)} (Trend up, RSI ${rsi.toFixed(1)}, MACD bullish)`;
     signalType = "buy";
-  } else if (score <= -2) {
-    signalText = `SELL at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD bearish, trend down)`;
+  } else if (score <= -4) {
+    signalText = `SELL at ₹${latestPrice.toFixed(2)} (Trend down, RSI ${rsi.toFixed(1)}, MACD bearish)`;
     signalType = "sell";
   } else {
-    signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, MACD neutral)`;
+    signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, mixed trend)`;
   }
 
   setSignal(`Signal: ${signalText}`, signalType);
