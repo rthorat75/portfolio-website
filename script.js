@@ -1,5 +1,6 @@
 let chart;
 let stockList = [];
+const stockCache = {};
 
 const fallbackStockList = [
   { name: "Reliance Industries", symbol: "RELIANCE.NS" },
@@ -119,13 +120,74 @@ function setSignal(message, type = "hold") {
   const signalBox = document.getElementById("signalBox");
   if (!signalBox) return;
 
-  signalBox.className = "signalBox " + type;
+  signalBox.className = `signalBox ${type}`;
   signalBox.innerText = message;
+}
+
+function setLoadingState() {
+  const signalBox = document.getElementById("signalBox");
+  if (!signalBox) return;
+
+  signalBox.className = "signalBox loading";
+  signalBox.innerText = "Loading stock signal...";
 }
 
 function fetchWithProxy(url) {
   const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
   return fetch(proxyUrl);
+}
+
+function getLocalPriceSeries(symbol) {
+  const key = symbol.toUpperCase();
+  const fallback = fallbackPriceMap[key];
+  if (fallback && fallback.length) {
+    return {
+      prices: fallback.slice(),
+      labels: generateRecentDateLabels(fallback.length)
+    };
+  }
+
+  const hash = Array.from(symbol).reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const base = 50 + (hash % 250);
+  const prices = [];
+  let value = base;
+
+  for (let i = 0; i < 30; i++) {
+    const drift = ((Math.sin(i + hash) + 1) * 6) + (i % 5) - 2;
+    value += drift;
+    prices.push(Number(value.toFixed(2)));
+  }
+
+  return {
+    prices,
+    labels: generateRecentDateLabels(prices.length)
+  };
+}
+
+async function fetchChartData(symbol) {
+  const key = symbol.toUpperCase();
+
+  if (location.hostname.includes("github.io") || location.protocol === "file:") {
+    return { localOnly: true, data: getLocalPriceSeries(key) };
+  }
+
+  const directUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo`;
+
+  try {
+    const response = await fetch(directUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Direct request failed: ${response.status}`);
+    return { localOnly: false, data: await response.json() };
+  } catch (directError) {
+    console.warn("Direct Yahoo fetch failed; trying proxy.", directError);
+    try {
+      const proxyResponse = await fetchWithProxy(directUrl);
+      if (!proxyResponse.ok) throw new Error(`Proxy request failed: ${proxyResponse.status}`);
+      return { localOnly: false, data: await proxyResponse.json() };
+    } catch (proxyError) {
+      console.warn("Proxy fetch also failed. Falling back to local prices.", proxyError);
+      return { localOnly: true, data: getLocalPriceSeries(key) };
+    }
+  }
 }
 
 async function loadStockList() {
@@ -290,28 +352,39 @@ async function loadStock() {
     return;
   }
 
-  let validPrices = fallbackPriceMap[stock.symbol.toUpperCase()] || null;
+  setLoadingState();
+
+  const cacheKey = stock.symbol.toUpperCase();
+  let validPrices = fallbackPriceMap[cacheKey] || null;
   let labels = null;
 
-  if (!validPrices) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stock.symbol}?interval=1d&range=3mo`;
-
+  if (stockCache[cacheKey]) {
+    validPrices = stockCache[cacheKey].prices;
+    labels = stockCache[cacheKey].labels;
+  } else if (!validPrices) {
     try {
-      const response = await fetchWithProxy(url);
-      const data = await response.json();
+      const response = await fetchChartData(stock.symbol);
+      const result = response.data;
 
-      if (!data.chart || !data.chart.result || !data.chart.result[0]) {
+      if (response.localOnly) {
+        validPrices = result.prices;
+        labels = result.labels;
+      } else if (!result.chart || !result.chart.result || !result.chart.result[0]) {
         setSignal("No data found for this symbol.", "hold");
         return;
+      } else {
+        const prices = result.chart.result[0].indicators.quote[0].close;
+        validPrices = prices.filter(price => typeof price === "number" && !Number.isNaN(price));
+        labels = result.chart.result[0].timestamp.map(ts => new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
       }
 
-      const prices = data.chart.result[0].indicators.quote[0].close;
-      validPrices = prices.filter(price => typeof price === "number" && !Number.isNaN(price));
-      labels = data.chart.result[0].timestamp.map(ts => new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+      stockCache[cacheKey] = { prices: validPrices, labels };
     } catch (err) {
       console.error("Error loading data", err);
-      validPrices = fallbackPriceMap[stock.symbol.toUpperCase()] || fallbackPriceMap["TCS.NS"];
-      labels = generateRecentDateLabels(validPrices.length);
+      const localData = getLocalPriceSeries(stock.symbol);
+      validPrices = localData.prices;
+      labels = localData.labels;
+      stockCache[cacheKey] = { prices: validPrices, labels };
     }
   }
 
