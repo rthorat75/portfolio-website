@@ -95,11 +95,11 @@ const fallbackPriceMap = {
 };
 
 const defaultSignalPicks = [
-  { type: "buy", stock: { name: "Reliance Industries", symbol: "RELIANCE.NS" }, signalText: "BUY at ₹2675.20 (Trend up, strong momentum)" },
   { type: "buy", stock: { name: "Infosys", symbol: "INFY.NS" }, signalText: "BUY at ₹1728.00 (Trend up, RSI support)" },
   { type: "buy", stock: { name: "Tata Consultancy Services", symbol: "TCS.NS" }, signalText: "BUY at ₹3805.00 (Trend up, MACD bullish)" },
   { type: "buy", stock: { name: "State Bank of India", symbol: "SBIN.NS" }, signalText: "BUY at ₹974.00 (Trend up, lower band support)" },
   { type: "buy", stock: { name: "ITC", symbol: "ITC.NS" }, signalText: "BUY at ₹512.00 (Trend up, volume confirmation)" },
+  { type: "buy", stock: { name: "HDFC Bank", symbol: "HDFCBANK.NS" }, signalText: "BUY at ₹1818.00 (Trend up, price above trend)" },
   { type: "sell", stock: { name: "Tata Motors", symbol: "TATAMOTORS.NS" }, signalText: "SELL at ₹536.59 (Trend down, MACD bearish)" },
   { type: "sell", stock: { name: "Oil & Natural Gas", symbol: "ONGC.NS" }, signalText: "SELL at ₹232.25 (Trend down, RSI weak)" },
   { type: "sell", stock: { name: "Wipro", symbol: "WIPRO.NS" }, signalText: "SELL at ₹180.95 (Trend down, resistance zone)" },
@@ -559,8 +559,8 @@ function evaluateTechnicalSignal(validPrices) {
   const bullishMomentum = macdBullish && ((rsi >= 45 && rsi <= 75) || rsi < 35);
   const bearishMomentum = macdBearish && ((rsi <= 55 && rsi >= 25) || rsi > 65);
 
-  const strongBuy = (bullishTrend && bullishMomentum) || (recentPercent > 1.5 && priceAboveMA && macdBullish) || (rsi < 35 && macdBullish && priceAboveMA && priceAboveVWAP);
-  const strongSell = (bearishTrend && bearishMomentum) || (recentPercent < -1.5 && priceBelowMA && macdBearish) || (rsi > 65 && macdBearish && priceBelowMA && priceBelowVWAP);
+  const strongBuy = (bullishTrend && bullishMomentum && priceAboveVWAP) || (recentPercent > 2.5 && priceAboveMA && macdBullish) || (rsi < 35 && macdBullish && priceAboveMA && priceAboveVWAP && recentPercent > 0.5);
+  const strongSell = (bearishTrend && bearishMomentum && priceBelowVWAP) || (recentPercent < -3 && priceBelowMA && macdBearish) || (rsi > 70 && macdBearish && priceBelowMA && priceBelowVWAP && recentPercent < -0.5);
 
   if (strongBuy) {
     return {
