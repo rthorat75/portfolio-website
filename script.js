@@ -597,28 +597,29 @@ async function loadStock() {
   const priceAboveVWAP = latestPrice > vwap;
   const priceBelowVWAP = latestPrice < vwap;
 
-  let score = 0;
+  const recentWindow = Math.max(5, Math.min(10, validPrices.length - 1));
+  const previousValue = validPrices[validPrices.length - recentWindow] || validPrices[0];
+  const recentPercent = previousValue === 0 ? 0 : ((latestPrice - previousValue) / previousValue) * 100;
 
-  if (priceAboveMA) score += 2;
-  if (priceBelowMA) score -= 2;
-  if (shortTrendUp) score += 1;
-  if (shortTrendDown) score -= 1;
-  if (emaTrendUp) score += 2;
-  if (emaTrendDown) score -= 2;
-  if (macdBullish) score += 2;
-  if (macdBearish) score -= 2;
-  if (rsi < 30) score += 1;
-  if (rsi > 70) score -= 1;
-  if (priceNearLowerBand) score += 1;
-  if (priceNearUpperBand) score -= 1;
-  if (priceAboveVWAP) score += 1;
-  if (priceBelowVWAP) score -= 1;
+  const bullishTrend = trendUp = latestPrice > ma10 && ma10 > ma20 && ema12 > ema26 && priceAboveMA;
+  const bearishTrend = trendDown = latestPrice < ma10 && ma10 < ma20 && ema12 < ema26 && priceBelowMA;
+  const bullishMomentum = macdBullish && (rsi >= 45 && rsi <= 75 || rsi < 35);
+  const bearishMomentum = macdBearish && (rsi <= 55 && rsi >= 25 || rsi > 65);
 
-  if (score >= 4) {
+  const strongBuy = (bullishTrend && bullishMomentum) || (recentPercent > 1.5 && priceAboveMA && macdBullish) || (rsi < 35 && macdBullish && priceAboveMA && priceAboveVWAP);
+  const strongSell = (bearishTrend && bearishMomentum) || (recentPercent < -1.5 && priceBelowMA && macdBearish) || (rsi > 65 && macdBearish && priceBelowMA && priceBelowVWAP);
+
+  if (strongBuy) {
     signalText = `BUY at ₹${latestPrice.toFixed(2)} (Trend up, RSI ${rsi.toFixed(1)}, MACD bullish)`;
     signalType = "buy";
-  } else if (score <= -4) {
+  } else if (strongSell) {
     signalText = `SELL at ₹${latestPrice.toFixed(2)} (Trend down, RSI ${rsi.toFixed(1)}, MACD bearish)`;
+    signalType = "sell";
+  } else if (priceNearLowerBand && macdBullish && rsi < 50) {
+    signalText = `BUY at ₹${latestPrice.toFixed(2)} (Lower band support, RSI ${rsi.toFixed(1)})`;
+    signalType = "buy";
+  } else if (priceNearUpperBand && macdBearish && rsi > 50) {
+    signalText = `SELL at ₹${latestPrice.toFixed(2)} (Upper band resistance, RSI ${rsi.toFixed(1)})`;
     signalType = "sell";
   } else {
     signalText = `HOLD at ₹${latestPrice.toFixed(2)} (RSI ${rsi.toFixed(1)}, mixed trend)`;
