@@ -33,13 +33,22 @@ async function fetchYahooSeries(symbol) {
 
   const closes = chart.indicators?.quote?.[0]?.close || [];
   const timestamps = chart.timestamp || [];
-  const validPrices = closes.filter(price => typeof price === 'number' && !Number.isNaN(price));
+  let validPrices = closes.filter(price => typeof price === 'number' && !Number.isNaN(price));
+  const currentPrice = Number(chart?.meta?.regularMarketPrice ?? chart?.meta?.currentPrice ?? chart?.meta?.previousClose ?? NaN);
+
+  if (Number.isFinite(currentPrice)) {
+    if (validPrices.length) {
+      validPrices[validPrices.length - 1] = currentPrice;
+    } else {
+      validPrices = [currentPrice];
+    }
+  }
 
   if (!validPrices.length) throw new Error('No valid close prices found');
 
   const labels = timestamps.map(ts => new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
 
-  return { prices: validPrices, labels, symbol: normalized };
+  return { prices: validPrices, labels, symbol: normalized, currentPrice };
 }
 
 module.exports = async function handler(req, res) {
@@ -64,7 +73,8 @@ module.exports = async function handler(req, res) {
       prices: data.prices,
       labels: data.labels,
       localOnly: false,
-      symbol: data.symbol
+      symbol: data.symbol,
+      currentPrice: data.currentPrice
     });
   } catch (err) {
     const fallback = buildFallbackSeries(symbol);

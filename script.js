@@ -168,6 +168,22 @@ function getLocalPriceSeries(symbol) {
   };
 }
 
+function getCurrentPriceOverride(data) {
+  if (!data) return null;
+
+  if (typeof data.currentPrice === 'number' && Number.isFinite(data.currentPrice)) {
+    return data.currentPrice;
+  }
+
+  if (typeof data.latestPrice === 'number' && Number.isFinite(data.latestPrice)) {
+    return data.latestPrice;
+  }
+
+  const chartMeta = data?.chart?.result?.[0]?.meta || {};
+  const candidate = Number(chartMeta.regularMarketPrice ?? chartMeta.currentPrice ?? chartMeta.previousClose ?? NaN);
+  return Number.isFinite(candidate) ? candidate : null;
+}
+
 async function fetchChartData(symbol) {
   const key = symbol.toUpperCase();
 
@@ -517,6 +533,11 @@ async function loadStock() {
         const prices = result.chart.result[0].indicators.quote[0].close;
         validPrices = prices.filter(price => typeof price === "number" && !Number.isNaN(price));
         labels = result.chart.result[0].timestamp.map(ts => new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+      }
+
+      const currentMarketPrice = getCurrentPriceOverride(result);
+      if (currentMarketPrice !== null && validPrices.length) {
+        validPrices[validPrices.length - 1] = Number(currentMarketPrice);
       }
 
       stockCache[cacheKey] = { prices: validPrices, labels };
